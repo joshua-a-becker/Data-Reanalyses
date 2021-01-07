@@ -101,32 +101,36 @@ assemble_group = function(n, k, clusters) {
 }
 
 
+set.seed(42)
 synthetic = data.frame(
-  num_groups=numeric()
-  ,est=numeric()
-  ,ifp_id=character()
-  , clust_id = numeric()
+    est=numeric()
+  , ifp_id=character()
+  , clust = numeric()
   , m=numeric()
+  , n=numeric()
   , year=numeric()
 )
 
-for(i in 1:1000) {
+for(i in 1:100) {
   print(i)
   for(m in 1:10) {
     for(n in c(5,10,15,20,25)) {
-      for(q_id in unique(test$ifp_id)) {
-        for(yr in 1:3) {
+      for(yr in 1:3) {
+        this_yr = subset(with_cluster, year==yr)
+        for(q_id in unique(with_cluster$ifp_id)) {
+          
+          dat = subset(this_yr, ifp_id == q_id)
+          
           tryCatch(# so if it can't find the right combo of people to form a group
           ########## it moves on
             {    
-              dat = subset(test, ifp_id == q_id)
               group = dat[assemble_group(n, m, dat$cluster),]
               synthetic[nrow(synthetic)+1,] = data.frame(
-                num_groups = length(unique(group$cluster)) 
-                , est = mean(group$final_answer)
+                  est = mean(group$final_answer)
                 , ifp_id = q_id
-                , clust_id = mean(group$cluster)
-                ,m=m
+                , clust = paste0(group$cluster,collapse=",")
+                , m=m
+                , n=n
                 , year=yr
               )
             }, error=function(e){}
@@ -138,25 +142,37 @@ for(i in 1:1000) {
 }
 
 
+
+
 final_d = synthetic %>%
   merge(q[,c("ifp_id","outcome")]) %>%
+  rowwise%>%
   mutate(
-    brier = (est-outcome*1)^2
-    , lambda = lambda()
+      brier = (est-outcome*1)^2
+    , diversity = 1/sum(prop.table(table(
+        strsplit(clust,",")%>%unlist%>%as.numeric
+      ))^2)
   )
 
 
 ggplot(final_d, aes(x=m, y=brier)) +
+  stat_summary(fun="mean", geom="point") +
+  facet_wrap(n~year)
+
+ggplot(final_d, aes(x=m, y=diversity)) +
   stat_summary(fun="mean", geom="point")
 
-ggplot(final_d, aes(x=num_groups, y=brier)) +
+
+ggplot(final_d, aes(x=diversity, y=brier)) +
   stat_summary(fun="mean", geom="point")
 
 
 my_stats = final_d %>%
   group_by(ifp_id, year, n) %>%
   summarize(
-    cor = cor.test(brier, num_groups)$est
+    cor.m = cor.test(brier, m)$est
+    ,cor.div = cor.test(brier, diversity)$est
   )
 
-t.test(my_stats$cor)
+wilcox.test(my_stats$cor.m)
+wilcox.test(my_stats$cor.div)
