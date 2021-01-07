@@ -1,0 +1,9 @@
+[submodule "Becker et al - Crowd Classification Problem"]
+	path = Becker et al - Crowd Classification Problem
+	url = https://github.com/joshua-a-becker/crowd-classification-problem
+[submodule "Becker et al 2019 - Wisdom of Partisan Crowds"]
+	path = Becker et al 2019 - Wisdom of Partisan Crowds
+	url = https://github.com/joshua-a-becker/wisdom-of-partisan-crowds
+[submodule "Becker et al 2019 - Woc Partisan"]
+	path = Becker et al 2019 - Woc Partisan
+	url = https://github.com/joshua-a-becker/wisdom-of-partisan-crowds
