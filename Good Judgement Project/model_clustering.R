@@ -1,3 +1,4 @@
+rm(list=ls());gc()
 library(stats)
 library(tidyverse)
 
@@ -9,11 +10,11 @@ d.2 = read.csv("data/survey_fcasts.yr2.csv") %>%
   mutate(year=2) %>%
   subset(user_id %in% d.1$user_id)
 
-d.3 = read.csv("data/survey_fcasts.yr2.csv") %>%
-  mutate(year=2)
+d.3 = read.csv("data/survey_fcasts.yr3.csv") %>%
+  mutate(year=3)
 
 
-d = rbind(d.1, d.2)
+d = rbind(d.1, d.2, d.3)
 
 q_all = read.csv("data/ifps.csv")
 q = q_all %>%
@@ -29,7 +30,7 @@ q = q_all %>%
 
 myd = d %>%
   subset(
-    ctt%in%c("1a") 
+    substr(ctt,1,2)%in%c("1a") 
     & ifp_id %in% q$ifp_id
     & answer_option == 'a'
     ) %>%
@@ -47,6 +48,8 @@ ind_d=myd %>%
     , brier_initial = (initial_answer - outcome) ^2
     , conf = abs(initial_answer-0.5)*2
   )
+
+### set up data from year 1 to run clustering algorithm
 
 by_user = ind_d %>%
   subset(year==1) %>%
@@ -71,48 +74,26 @@ with_cluster = ind_d %>%
     normalized = final_answer - mean(final_answer)
   )
 
+### test whether
+### clustering from year 1
+### predicts year 2 and 3
+
 aov(normalized ~ as.factor(cluster), 
     with_cluster %>% subset(year==2)
     ) %>%
   summary
 
-
-re_group = with_cluster %>%
-  subset(year==2)
-
-
-test =  d.3 %>% subset(
-  ctt%in%c("1a") 
-  & ifp_id %in% q$ifp_id
-  & answer_option == 'a'
-  & user_id %in% with_cluster$user_id
-) %>%
-  merge(q, by="ifp_id") %>%
-  group_by(ifp_id, user_id, year) %>%
-  summarize(
-    final_answer = value[fcast_date==max(fcast_date)] %>% last
-    , initial_answer = value[fcast_date==min(fcast_date)][1]
-    , did_change = length(fcast_date)>1
-    , count = length(fcast_date)
-    , outcome=unique(outcome)
-    , brier_final = (final_answer - outcome)^2
-    , brier_initial = (initial_answer - outcome) ^2
-    , conf = abs(initial_answer-0.5)*2
-  ) %>%
-  group_by(ifp_id) %>%
-  mutate(
-    normalized = final_answer - mean(final_answer)
-  ) %>%
-  merge(by_user[,c("user_id","cluster")], by="user_id")
-  
-
 aov(normalized ~ as.factor(cluster), 
-    test
+    with_cluster %>% subset(year==3)
 ) %>%
   summary
 
 
+
+###
 ### try some regrouping...
+### and see if diversity impacts accuracy!
+###
 
 assemble_group = function(n, k, clusters) {
   use_clusters = sample(unique(clusters), k)
@@ -126,26 +107,32 @@ synthetic = data.frame(
   ,ifp_id=character()
   , clust_id = numeric()
   , m=numeric()
+  , year=numeric()
 )
-n=10
+
 for(i in 1:1000) {
   print(i)
   for(m in 1:10) {
-    for(q_id in unique(test$ifp_id)) {
-      
-      tryCatch(
-        {    
-          dat = subset(test, ifp_id == q_id)
-          group = dat[assemble_group(n, m, dat$cluster),]
-          synthetic[nrow(synthetic)+1,] = data.frame(
-            num_groups = length(unique(group$cluster)) 
-            , est = mean(group$final_answer)
-            , ifp_id = q_id
-            , clust_id = mean(group$cluster)
-            ,m=m
+    for(n in c(5,10,15,20,25)) {
+      for(q_id in unique(test$ifp_id)) {
+        for(yr in 1:3) {
+          tryCatch(# so if it can't find the right combo of people to form a group
+          ########## it moves on
+            {    
+              dat = subset(test, ifp_id == q_id)
+              group = dat[assemble_group(n, m, dat$cluster),]
+              synthetic[nrow(synthetic)+1,] = data.frame(
+                num_groups = length(unique(group$cluster)) 
+                , est = mean(group$final_answer)
+                , ifp_id = q_id
+                , clust_id = mean(group$cluster)
+                ,m=m
+                , year=yr
+              )
+            }, error=function(e){}
           )
-        }, error=function(e){}
-      )
+        }
+      }
     }
   }
 }
@@ -155,6 +142,7 @@ final_d = synthetic %>%
   merge(q[,c("ifp_id","outcome")]) %>%
   mutate(
     brier = (est-outcome*1)^2
+    , lambda = lambda()
   )
 
 
@@ -166,7 +154,7 @@ ggplot(final_d, aes(x=num_groups, y=brier)) +
 
 
 my_stats = final_d %>%
-  group_by(ifp_id) %>%
+  group_by(ifp_id, year, n) %>%
   summarize(
     cor = cor.test(brier, num_groups)$est
   )

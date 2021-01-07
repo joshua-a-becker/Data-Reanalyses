@@ -64,13 +64,14 @@ glm((ind_d$outcome==(ind_d$initial_answer>0.5)) ~ ind_d$conf) %>%
 
 hist(sum_d$pct_correct)
 
-ggplot(sum_d, aes(x=pct_correct, y=cor2)) +
+ggplot(sum_d, aes(x=pct_correct, y=cor)) +
   geom_point() +
   geom_hline(yintercept=0) +
   geom_vline(xintercept=0.5)
 
-cor.test(sum_d$pct_correct, sum_d$cor2)
-cor.test(sum_d$pct_correct, sum_d$glm2)
+cor.test(sum_d$pct_correct, sum_d$cor)
+
+cor.test(sum_d$pct_correct, sum_d$glm)
 
 cor.test(ind_d$conf, ind_d$brier_initial)
 cor.test(ind_d$did_change*1, ind_d$brier_initial)
